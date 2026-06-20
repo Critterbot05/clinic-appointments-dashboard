@@ -606,6 +606,48 @@ if "Cédula" in df.columns:
             fig_yoy.update_yaxes(ticksuffix="%")
             st.plotly_chart(fig_yoy, use_container_width=True)
 
+        # ----- 6-month retention (SaaS-style formula, back-to-back) -----
+        st.markdown(
+            "**6-month retention (back-to-back)** — for each half-year period, "
+            "`(E − N) / S × 100` where "
+            "S = patients in the previous half-year, "
+            "E = patients in the current half-year, "
+            "N = patients in E who were NOT in S "
+            "(both newly acquired and reactivated after a gap). "
+            "This measures strict period-to-period continuity."
+        )
+        eligible["half"] = (
+            eligible["fecha"].dt.year.astype(str)
+            + "-H"
+            + ((eligible["fecha"].dt.month - 1) // 6 + 1).astype(str)
+        )
+        patients_by_half = eligible.groupby("half")["Cédula"].apply(set).sort_index()
+        halves = patients_by_half.index.tolist()
+        hrows = []
+        for i in range(1, len(halves)):
+            prev_h, cur_h = halves[i - 1], halves[i]
+            S = patients_by_half.loc[prev_h]
+            E = patients_by_half.loc[cur_h]
+            N = E - S
+            retained = len(E - N)
+            retention = (retained / len(S) * 100) if S else 0
+            hrows.append({
+                "Period": cur_h,
+                "S (prev half)": len(S),
+                "E (this half)": len(E),
+                "N (not in S)": len(N),
+                "E − N (retained)": retained,
+                "Retention %": round(retention, 1),
+            })
+        if hrows:
+            half_df = pd.DataFrame(hrows)
+            fig_half = px.line(half_df, x="Period", y="Retention %", markers=True)
+            fig_half.update_yaxes(ticksuffix="%")
+            st.plotly_chart(fig_half, use_container_width=True)
+            st.dataframe(half_df, use_container_width=True, hide_index=True)
+            download_button(half_df, "⬇ Download 6-month retention CSV",
+                            "half_year_retention.csv")
+
         # ----- Active patient rate (quarter-over-quarter) -----
         st.markdown("**Active-patient rate** — % of a quarter's patients who "
                     "were also active the previous quarter.")
