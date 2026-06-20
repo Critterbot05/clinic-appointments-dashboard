@@ -678,50 +678,66 @@ with tab_dash:
                 st.dataframe(unpriced, use_container_width=True, hide_index=True)
                 download_button(unpriced, "⬇ Download unpriced list", "unpriced_treatments.csv")
 
-        # Actual revenue vs theoretical (two series, no realization %)
+        # Actual revenue vs. what we can attribute to attended work
         if not revenue_df.empty:
-            st.markdown("**Actual revenue vs. theoretical billed value**")
-            st.warning(
-                "These two series are **not** a collection rate. They diverge because "
-                "ortho is paid in installments collected at near-$0 control visits, ~20% "
-                "of appointments are unpriced, and procedure mix shifts over time. "
-                "Use *actual revenue* as the income source of truth; treat *theoretical "
-                "value* as a list-price composition signal, not something to divide into actual."
-            )
+            st.markdown("### How much revenue can we account for?")
+
             fin_year = fin.copy()
             fin_year["año"] = fin_year["fecha"].dt.year
-            theo_year = fin_year.groupby("año")["att_value"].sum()
-            theo_year_non = fin_year[~fin_year["is_ortho"]].groupby("año")["att_value"].sum()
+            attributable = fin_year.groupby("año")["att_value"].sum()
             act_year = revenue_df.groupby("year")["revenue"].sum()
 
-            yr_tbl = pd.DataFrame({
-                "Actual revenue": act_year,
-                "Theoretical (all)": theo_year,
-                "Theoretical (excl ortho)": theo_year_non,
+            acc = pd.DataFrame({
+                "Actual cash": act_year,
+                "Attributable (attended × list)": attributable,
             }).dropna(how="all")
-            yr_tbl["Gap (actual − theo all)"] = yr_tbl["Actual revenue"] - yr_tbl["Theoretical (all)"]
-            yr_tbl.index.name = "Year"
-            yr_tbl = yr_tbl.round(0).reset_index()
+            acc["Difference"] = acc["Actual cash"] - acc["Attributable (attended × list)"]
+            acc.index.name = "Year"
 
-            fig_rev = px.line(
-                yr_tbl, x="Year",
-                y=["Actual revenue", "Theoretical (all)", "Theoretical (excl ortho)"],
-                markers=True, labels={"value": "$", "variable": ""},
+            tot_actual = acc["Actual cash"].sum()
+            tot_attr = acc["Attributable (attended × list)"].sum()
+            tot_diff = tot_actual - tot_attr
+
+            h1, h2, h3 = st.columns(3)
+            h1.metric("Total cash collected", f"${tot_actual:,.0f}")
+            h2.metric("Attributable to attended work", f"${tot_attr:,.0f}",
+                      help="Attended appointments valued at list price.")
+            h3.metric("Cannot be tied to a treatment", f"${tot_diff:,.0f}",
+                      f"{tot_diff / tot_actual * 100:.0f}% of cash",
+                      help="Mostly ortho installments + unpriced visits + payment timing.")
+
+            st.caption(
+                "**Difference** = cash minus the list-price value of attended visits. "
+                "When **positive**, cash exceeds what we can attribute — ortho installments "
+                "(collected at $0 control visits), unpriced appointments, and timing. "
+                "When **negative**, list value runs *ahead* of cash — ortho billed at "
+                "treatment start but collected later. The sign swing is why a single "
+                "'unaccounted' figure isn't reliable; treatment-level revenue needs the "
+                "payment ledger."
             )
-            st.plotly_chart(fig_rev, use_container_width=True)
-            st.dataframe(yr_tbl, use_container_width=True, hide_index=True)
-            download_button(yr_tbl, "⬇ Download yearly actual vs theoretical",
-                            "revenue_vs_theoretical.csv")
 
-            # Actual revenue trend on its own (the reliable series)
-            st.markdown("**Actual revenue trend**")
-            rev_plot = revenue_df.copy()
-            fig_act = px.line(rev_plot, x="period", y="revenue", markers=True,
+            disp = acc.round(0).reset_index()
+            disp["% of cash unaccounted"] = (
+                acc["Difference"] / acc["Actual cash"] * 100
+            ).round(0).values
+            st.dataframe(disp, use_container_width=True, hide_index=True)
+            download_button(disp, "⬇ Download revenue accounting", "revenue_accounting.csv")
+
+            fig_acc = px.bar(
+                acc.reset_index(), x="Year",
+                y=["Actual cash", "Attributable (attended × list)"],
+                barmode="group", labels={"value": "$", "variable": ""},
+                title="Actual cash vs. attributable to attended work, by year",
+            )
+            st.plotly_chart(fig_acc, use_container_width=True)
+
+            st.markdown("**Actual revenue trend (the reliable figure)**")
+            fig_act = px.line(revenue_df, x="period", y="revenue", markers=True,
                               labels={"revenue": "Actual revenue ($)", "period": ""})
             st.plotly_chart(fig_act, use_container_width=True)
         else:
-            st.info("Upload the monthly revenue file in the sidebar to compare actual "
-                    "revenue against theoretical billed value.")
+            st.info("Upload the monthly revenue file in the sidebar to see how much "
+                    "revenue can be accounted for at the treatment level.")
 
     # ----- Yearly / Quarterly treatment performance -----
     with st.expander("📅 Yearly / Quarterly treatment performance", expanded=False):
