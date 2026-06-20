@@ -143,8 +143,8 @@ def attach_prices(df: pd.DataFrame) -> pd.DataFrame:
     uniq = tuple(sorted(df["tratamiento"].dropna().unique().tolist()))
     lookup = build_treatment_prices(uniq).set_index("tratamiento")
     df["precio"] = df["tratamiento"].map(lookup["precio"])
-    df["priced"] = df["tratamiento"].map(lookup["priced"]).fillna(False)
-    df["is_ortho"] = df["tratamiento"].map(lookup["is_ortho"]).fillna(False)
+    df["priced"] = df["tratamiento"].map(lookup["priced"]).fillna(False).astype(bool)
+    df["is_ortho"] = df["tratamiento"].map(lookup["is_ortho"]).fillna(False).astype(bool)
     return df
 
 
