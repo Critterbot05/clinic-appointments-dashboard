@@ -25,9 +25,10 @@ excluded from rate denominators).
 - **Rolling 3-month rate** = `Cancelled(3M) ÷ Decided(3M) × 100`, where `X(3M) = rolling(3).sum()` (volume-weighted, not an average of rates)
 
 ### Pricing engine
-- **normalize_name** = strip accents → uppercase → collapse spaces → trim `.-/`
-- **price match** = exact normalized match → else strip `TENTATIVA` prefix → else split on `+` and sum the parts (only confident matches are priced; ~80% coverage)
-- **att_value** (per row) = `precio if (status == Attended and priced) else 0`
+- **treatment extraction** = take `Asunto` before `(`, drop staff note prefixes split on `!!!` (keep the procedure after the note), strip leading junk
+- **normalize_name** = strip accents → uppercase → remove periods → collapse spaces → trim `-/`
+- **price match** = exact normalized match → confirmed alias table (e.g. `…CORONA EXT` → `…CORONA PAC EXTERNO`) → strip `TENTATIVA` prefix → split on `+` and sum parts. Exact-only (no fuzzy), so a price is never guessed. ~82% of attended appointments priced
+- **att_value** (per row) = `precio if (status == Attended and priced) else 0`. Cancelled/no-show and unpriced rows contribute $0; ~47% of priced attended volume is $0 ortho controls (paid via installments)
 
 ### Treatments (popularity vs. value)
 - **total / attended / cancelled / noshow** = per-treatment counts

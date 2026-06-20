@@ -48,7 +48,11 @@ def extract_treatment(asunto: object) -> str | None:
         return None
     text = asunto.split("Motivo de eliminacion")[0]
     text = text.split("(", 1)[0]
-    text = re.sub(r"\s*-\s*$", "", text).strip(" -\t\n")
+    # Staff write free-text notes before the real procedure, separated by '!!!'
+    # (e.g. "REALIZAR TOMOGRAFÍA!!! ENDODONCIA TIPO IV"). Keep the part after.
+    if "!!" in text:
+        text = re.split(r"!!+", text)[-1]
+    text = re.sub(r"\s*-\s*$", "", text).strip(" .-!\t\n")
     if not text or re.fullmatch(r"[\d\s\-/]+", text):
         return None
     return text.upper()
@@ -70,13 +74,23 @@ def normalize_name(s: object) -> str:
     if not isinstance(s, str):
         return ""
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
-    s = s.upper()
-    s = re.sub(r"\s+", " ", s).strip(" .-/")
+    s = s.upper().replace(".", " ")
+    s = re.sub(r"\s+", " ", s).strip(" -/")
     return s
 
 
 def is_ortho_name(n: str) -> bool:
     return bool(re.search(r"ORTO|BRACKET|BRAKET|RETENEDOR", n))
+
+
+# Known naming variants → exact price-list entry. Only confirmed-safe mappings:
+# "EXT" is the clinic's abbreviation for "PAC EXTERNO"; the digital panorámica has
+# no separate list entry. Verified against price_list.csv.
+PRICE_ALIASES = {
+    "RX PANORAMICA DIGITAL": "RX PANORAMICA",
+    "CEMENTACION DEFINITIVA CORONA EXT": "CEMENTACION DEFINITIVA CORONA PAC EXTERNO",
+    "CEMENTACION TEMPORAL CORONA EXT": "CEMENTACION TEMPORAL CORONA PACIENTE EXTERNO",
+}
 
 
 try:
@@ -114,6 +128,7 @@ def price_one(name: str, price_map: dict, ortho_map: dict) -> tuple[float, bool,
     n = re.sub(r"//+", " ", n).strip()
     if not n:
         return np.nan, False, False
+    n = PRICE_ALIASES.get(n, n)
     if n in price_map:
         return price_map[n], True, ortho_map.get(n, is_ortho_name(n))
     if "+" in n:
