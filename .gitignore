@@ -3,6 +3,9 @@
 *.xls
 *.csv
 
+# Exception: bundled price list is reference data (no patient/financial info)
+!price_list.csv
+
 # Python
 __pycache__/
 *.py[cod]
